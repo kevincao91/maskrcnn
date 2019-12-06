@@ -11,6 +11,7 @@ from lxml import etree, objectify
 
 parser = argparse.ArgumentParser(description='images to xml by model')
 parser.add_argument('--imgs-dir',type=str,default='./imgs')
+parser.add_argument('--xmls-dir',type=str,default='./xmls')
 parser.add_argument('--outputs-dir',type=str,default='./outputs')
 parser.add_argument('--scene',type=str,default='jt')
 parser.add_argument('--wscene',type=str,default=None)
@@ -89,13 +90,13 @@ label_dic={
 }
 
 scene = args.scene
-print('当前选择模型场景为：{} \n'.format(scene))
-if args.cfg_file:
+print('当前选择模型场景为：{} \n'.format(scene), args.wscene)
+if args.cfg_file != 'None':
     cfg_path=args.cfg_file
 else:
     cfg_path=cfg_dic[scene]
 print('当前选择配置文件路径为：{} \n'.format(cfg_path))
-if args.wts_file:
+if args.wts_file != 'None':
     wts_path=args.wts_file
 else:
     wts_path=wts_dic[scene]
@@ -106,13 +107,17 @@ else:
     label_map=label_dic[scene]
 print('当前选择映射标签表为：{} \n'.format(label_map))
 img_path=args.imgs_dir
+xml_path=args.xmls_dir
 out_xml_path=os.path.join(args.outputs_dir, 'xml')
 if not os.path.exists(out_xml_path):
     os.makedirs(out_xml_path)
 img_out_dir = os.path.join(args.outputs_dir, "img")
 if not os.path.exists(img_out_dir):
     os.mkdir(img_out_dir)
-print('原始图片路径为：{} \nxml输出路径为：{}\nimg输出路径为：{}'.format(img_path,out_xml_path,img_out_dir))
+print('原始图片路径为：{} \n'
+        '图片标注路径为：{} \n'
+        'xml输出路径为：{} \n'
+        'img输出路径为：{}'.format(img_path,xml_path,out_xml_path,img_out_dir))
 
 detectModel=Predictor(label_map)
 detectModel.initModel(cfg_path, wts_path)
@@ -121,7 +126,7 @@ print('model init finish!')
 need_xml = False
 need_img = True
 need_video = False
-
+show_gt = True
 
 if need_video:
     # init video info
@@ -138,10 +143,10 @@ if need_video:
     result_path = os.path.join(args.outputs_dir, video_name + "_det.avi")
     videowriter = cv2.VideoWriter(result_path, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), video_fps, video_size)
 
-if args.wscene != None or args.wscene != 'all':
-    im_list = glob.glob(img_path + '/{}*.jpg'.format(args.wscene))
-else:
+if args.wscene == None or args.wscene == 'all':
     im_list = glob.glob(img_path + '/*.jpg')
+else:
+    im_list = glob.glob(img_path + '/{}*.jpg'.format(args.wscene))
 print(im_list[:10])
 pic_len=len(im_list)
 
@@ -151,6 +156,17 @@ for i in tqdm(range(pic_len)):
         continue
     pic_name=os.path.basename(im_list[i])
     image_in = cv2.imread(im_list[i])
+    xml_file_path = os.path.join(xml_path, pic_name.replace('.jpg', '.xml'))
+    #print(im_list[i])
+    #print(xml_file_path)
+
+    if show_gt:
+        if os.path.exists(xml_file_path):
+            gt = detectModel.get_gt(xml_file_path)
+        else:
+            continue
+    else:
+        gt = None
 
     if need_video:
         # 对video需要resize,对xml不需要
@@ -168,7 +184,12 @@ for i in tqdm(range(pic_len)):
         etree.ElementTree(get_xml).write(os.path.join(out_xml_path,pic_name).rstrip(".jpg") + '.xml', pretty_print=True)
 
     if need_img or need_video:
-        result = detectModel.get_image_result(image_in, top_predictions)  
+        #print(gt)
+        #print(gt.get_field('labels'))
+        #print(top_predictions)
+        #print(top_predictions.get_field('labels'))
+        result = detectModel.get_image_result(image_in,gt,top_predictions)  
+        
         '''
         cv2.imshow('out', result)
         if cv2.waitKey(500) & 0xFF == ord('q'):

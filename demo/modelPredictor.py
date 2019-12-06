@@ -10,6 +10,9 @@ from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.modeling.detector import build_detection_model
 from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
 from maskrcnn_benchmark.structures.image_list import to_image_list
+from maskrcnn_benchmark.structures.bounding_box import BoxList
+
+from bs4 import BeautifulSoup
 
 class Resize(object):
     def __init__(self, min_size, max_size):
@@ -43,6 +46,7 @@ class Resize(object):
         size = self.get_size(image.size)
         image = F.resize(image, size)
         return image
+
 class Predictor(object):
 
     def __init__(self, label_map):
@@ -213,8 +217,13 @@ class Predictor(object):
             tree.append(obj_tree)
         return tree,top_predictions
         
-    def get_image_result(self, image, top_predictions):
+    def get_image_result(self, image, gt, top_predictions):
         result = image.copy()
+        if gt:
+            # gt
+            result = self.overlay_boxes(result, gt, True)
+            result = self.overlay_class_names(result, gt, True)
+        # pre
         result = self.overlay_boxes(result, top_predictions)
         result = self.overlay_class_names(result, top_predictions)
         return result
@@ -230,7 +239,7 @@ class Predictor(object):
         colors = (colors % 255).numpy().astype("uint8")
         return colors
 
-    def overlay_boxes(self, image, predictions):
+    def overlay_boxes(self, image, predictions, is_gt=False):
         """
         Adds the predicted boxes on top of the image
 
@@ -241,8 +250,16 @@ class Predictor(object):
         """
         labels = predictions.get_field("labels")
         boxes = predictions.bbox
-
-        colors = self.compute_colors_for_labels(labels).tolist()
+        
+        if is_gt:
+            palette = torch.tensor([0, 0, 255])
+            labels = torch.tensor(np.ones_like(labels))
+            colors = labels[:, None] * palette
+            colors = colors.numpy().tolist()
+            #print(colors)
+        else:
+            colors = self.compute_colors_for_labels(labels).tolist()
+            #print(colors)
 
         for box, color in zip(boxes, colors):
             box = box.to(torch.int64)
@@ -254,7 +271,7 @@ class Predictor(object):
         return image
         
         
-    def overlay_class_names(self, image, predictions):
+    def overlay_class_names(self, image, predictions, is_gt=False):
         """
         Adds detected class names and scores in the positions defined by the
         top-left corner of the predicted bounding box
@@ -272,13 +289,66 @@ class Predictor(object):
         template = "{}: {:.2f}"
         for box, score, label in zip(boxes, scores, labels):
             x, y = box[:2]
-            s = template.format(label, score)
-            cv2.putText(
-                image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1
-            )
+            if is_gt:
+                s = "GT:{}".format(label)
+                cv2.putText(
+                    image, s, (x, y+10), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1)
+            else:
+                s = template.format(label, score)
+                cv2.putText(
+                    image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1)
 
         return image 
 
+    def get_gt(self, path):
 
+        objs, size = self.read_objects(path)
+        #print(objs)
+        box_list = []
+        label_list = []
+        score_list = []
+        for obj in objs:
+            name = obj['name']
+            idx = [k for k,v in self.label_map.items() if v == name][0]
+            #print(name, idx)
+            xmin = int(obj['xmin'])
+            ymin = int(obj['ymin'])
+            xmax = int(obj['xmax'])
+            ymax = int(obj['ymax'])
+            box_list.append([xmin,ymin,xmax,ymax])
+            label_list.append(idx)
+            score_list.append(1)
+        
+        #print(label_list)
+        if box_list==[]:
+            #print(path)
+            return None
+        
+        gt_bbox = BoxList(box_list, size)
+        gt_bbox.add_field('labels', torch.as_tensor(label_list))
+        gt_bbox.add_field('scores', torch.as_tensor(score_list))
+        return gt_bbox
 
+    def read_objects(self, path=None):
+        if path==None:
+            print("[ERROR ] Path is None!")
+            return []
+        objs=[]
+        with open(path,'rb') as fr:
+            all_txt=fr.read()
+            soup=BeautifulSoup(all_txt,"lxml")
+            s_objects=soup.find('size')
+            siz_width=s_objects.find("width").text
+            siz_height=s_objects.find("height").text
+            #print(siz_width, siz_height)
+            m_objects=soup.find_all('object')
+            for m_object in m_objects:
+                name=m_object.find_all("name")[0].get_text()
+                xmin=m_object.find_all("xmin")[0].get_text()
+                ymin=m_object.find_all("ymin")[0].get_text()
+                xmax=m_object.find_all("xmax")[0].get_text()
+                ymax=m_object.find_all("ymax")[0].get_text()
+                objs.append({"name":name,
+                    "xmin":xmin,"ymin":ymin,"xmax":xmax,"ymax":ymax})
+        return objs, (siz_width, siz_height)
 
