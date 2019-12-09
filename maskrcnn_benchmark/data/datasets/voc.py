@@ -15,7 +15,7 @@ from maskrcnn_benchmark.structures.bounding_box import BoxList
 
 
 class PascalVOCDataset(torch.utils.data.Dataset):
-
+    '''
     CLASSES = (
         "__background__ ",
         "aeroplane",
@@ -39,7 +39,17 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         "train",
         "tvmonitor",
     )
+    '''
+    CLASSES = (
+        "__background__ ",
+        "car",
+        "bus",
+        "van",
+        "others",
+    )
 
+    
+    
     def __init__(self, data_dir, split, use_difficult=False, transforms=None):
         self.root = data_dir
         self.image_set = split

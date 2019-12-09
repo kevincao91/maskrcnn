@@ -72,7 +72,7 @@ def train(cfg, local_rank, distributed):
     logger = logging.getLogger("maskrcnn_benchmark.data_loader")
     logger.info("Start loader data")
     if cfg.INPUT.USE_SSD_DATA_AUGMENT:
-        logger.info("#use custom ssd data augmentations!")
+        logger.info("# Use custom ssd data augmentations !")
 
     data_loader = make_data_loader(
         cfg,

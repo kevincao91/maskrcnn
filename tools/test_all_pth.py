@@ -9,6 +9,9 @@ from maskrcnn_benchmark.utils.env import setup_environment  # noqa F401 isort:sk
 
 import argparse
 import os
+import glob
+import matplotlib.pyplot as plt
+import random
 
 import torch
 from maskrcnn_benchmark.config import cfg
@@ -33,55 +36,87 @@ except ImportError:
     raise ImportError('Use APEX for multi-precision via apex.amp')
 
 
-
-def run_test(cfg, ckpt, local_rank, distributed):
-
-    model = build_detection_model(cfg)
-    device = torch.device(cfg.MODEL.DEVICE)
-    model.to(device)
-
-    if distributed:
-        model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[local_rank], output_device=local_rank,
-            # this should be removed if we update BatchNorm stats
-            broadcast_buffers=False,
-        )
-
-
-    output_dir = cfg.OUTPUT_DIR
-    checkpointer = DetectronCheckpointer(cfg, model, save_dir=output_dir)
-    _ = checkpointer.load(ckpt, use_latest=None)
+def plot_mAP(result_dict):
+    data = [[],[]]
+    for itr in result_dict:
+        result=result_dict[itr]
+        mAP=result['map']
+        data[0].append(itr)
+        data[1].append(mAP)
     
-    if distributed:
-        model = model.module
-    torch.cuda.empty_cache()  # TODO check if it helps
-    iou_types = ("bbox",)
-    if cfg.MODEL.MASK_ON:
-        iou_types = iou_types + ("segm",)
-    if cfg.MODEL.KEYPOINT_ON:
-        iou_types = iou_types + ("keypoints",)
-    output_folders = [None] * len(cfg.DATASETS.TEST)
-    dataset_names = cfg.DATASETS.TEST
-    if cfg.OUTPUT_DIR:
-        for idx, dataset_name in enumerate(dataset_names):
-            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
-            mkdir(output_folder)
-            output_folders[idx] = output_folder
-    data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
-    for output_folder, dataset_name, data_loader_val in zip(output_folders, dataset_names, data_loaders_val):
-        inference(
-            model,
-            data_loader_val,
-            dataset_name=dataset_name,
-            iou_types=iou_types,
-            box_only=False if cfg.MODEL.RETINANET_ON else cfg.MODEL.RPN_ONLY,
-            device=cfg.MODEL.DEVICE,
-            expected_results=cfg.TEST.EXPECTED_RESULTS,
-            expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
-            output_folder=output_folder,
-        )
-        synchronize()
+    plt.figure(figsize = (18, 8))
+    color = [random.random(), random.random(), random.random()]
+    plt.plot(data[0], data[1], color = color, linewidth = 1.7)
+    plt.title('test mAP vs itr')
+    plt.savefig(path_to_png)
+    #plt.show()
 
+
+def run_test(model, cfg, ckpt_dir, distributed):
+
+    print('find all pth:')
+    for root, dirs, files in os.walk(ckpt_dir):
+        pth_file_list = glob.glob(os.path.join(root, '*.pth'))
+        break
+    # print(pth_file_list)
+    ckpt_dict = {}
+    for pth_file in pth_file_list:
+        itr_str = os.path.basename(pth_file).split('.')[0].split('_')[-1]
+        if itr_str[0]=='0':
+            itr = int(itr_str)
+            ckpt = pth_file
+            ckpt_dict[itr]=ckpt
+        elif itr_str=='final':
+            if cfg.SOLVER.MAX_ITER not in ckpt_dict:
+                itr = cfg.SOLVER.MAX_ITER
+                ckpt = pth_file
+                ckpt_dict[itr]=ckpt
+        else:
+            print('file name error !')
+            exit()
+    print(ckpt_dict)
+    
+    output_dir = cfg.OUTPUT_DIR
+    
+    result_dict = {}
+    for itr in ckpt_dict:
+        ckpt=ckpt_dict[itr]
+        print(str(itr), ckpt)
+        
+        checkpointer = DetectronCheckpointer(cfg, model, save_dir=output_dir)
+        _ = checkpointer.load(ckpt, use_latest=None)
+        
+        if distributed:
+            model = model.module
+        torch.cuda.empty_cache()  # TODO check if it helps
+        iou_types = ("bbox",)
+        if cfg.MODEL.MASK_ON:
+            iou_types = iou_types + ("segm",)
+        if cfg.MODEL.KEYPOINT_ON:
+            iou_types = iou_types + ("keypoints",)
+        output_folders = [None] * len(cfg.DATASETS.TEST)
+        dataset_names = cfg.DATASETS.TEST
+        if cfg.OUTPUT_DIR:
+            for idx, dataset_name in enumerate(dataset_names):
+                output_folder = os.path.join(cfg.OUTPUT_DIR, "inference", dataset_name)
+                mkdir(output_folder)
+                output_folders[idx] = output_folder
+        data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
+        for output_folder, dataset_name, data_loader_val in zip(output_folders, dataset_names, data_loaders_val):
+            result=inference(
+                            model,
+                            data_loader_val,
+                            dataset_name=dataset_name,
+                            iou_types=iou_types,
+                            box_only=False if cfg.MODEL.RETINANET_ON else cfg.MODEL.RPN_ONLY,
+                            device=cfg.MODEL.DEVICE,
+                            expected_results=cfg.TEST.EXPECTED_RESULTS,
+                            expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
+                            output_folder=output_folder,
+                            )
+            synchronize()
+        result_dict[itr]=result
+    plot_mAP(result_dict)
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Testing")
@@ -94,7 +129,7 @@ def main():
     )
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument(
-        "--ckpt",
+        "--ckpt-dir",
         default="",
         metavar="FILE",
         help="path to ckpt file",
@@ -155,8 +190,19 @@ def main():
     # save overloaded model config in the output directory
     save_config(cfg, output_config_path)
 
-    if args.ckpt:
-        run_test(cfg, args.ckpt, args.local_rank, args.distributed)
+    model = build_detection_model(cfg)
+    device = torch.device(cfg.MODEL.DEVICE)
+    model.to(device)
+
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[local_rank], output_device=local_rank,
+            # this should be removed if we update BatchNorm stats
+            broadcast_buffers=False,
+        )
+
+    if args.ckpt_dir:
+        run_test(model, cfg, args.ckpt_dir, args.distributed)
 
 
 if __name__ == "__main__":

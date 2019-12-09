@@ -81,6 +81,9 @@ def _quantize(x, bins):
 def _compute_aspect_ratios(dataset):
     aspect_ratios = []
     for i in range(len(dataset)):
+        # add  test
+        if i%5000==0:
+            print(i,'/',len(dataset))
         img_info = dataset.get_img_info(i)
         aspect_ratio = float(img_info["height"]) / float(img_info["width"])
         aspect_ratios.append(aspect_ratio)
