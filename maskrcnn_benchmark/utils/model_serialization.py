@@ -37,6 +37,7 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
     idxs[max_match_size == 0] = -1
 
     # used for logging
+    # by kevin.cao
     max_size = max([len(key) for key in current_keys]) if current_keys else 1
     max_size_loaded = max([len(key) for key in loaded_keys]) if loaded_keys else 1
     log_str_template = "{: <{}} loaded from {: <{}} of shape {}"
@@ -47,6 +48,7 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
         key = current_keys[idx_new]
         key_old = loaded_keys[idx_old]
         model_state_dict[key] = loaded_state_dict[key_old]
+        '''
         logger.info(
             log_str_template.format(
                 key,
@@ -56,7 +58,7 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict):
                 tuple(loaded_state_dict[key_old].shape),
             )
         )
-
+        '''
 
 def strip_prefix_if_present(state_dict, prefix):
     keys = sorted(state_dict.keys())

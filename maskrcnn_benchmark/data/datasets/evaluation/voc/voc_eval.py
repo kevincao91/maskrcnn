@@ -38,7 +38,7 @@ def do_voc_evaluation(dataset, predictions, output_folder, logger):
         )
     logger.info(result_str)
     if output_folder:
-        with open(os.path.join(output_folder, "voc_result.txt"), "w") as fid:
+        with open(os.path.join(output_folder, "result.txt"), "w") as fid:
             fid.write(result_str)
     return result
 

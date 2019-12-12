@@ -126,14 +126,18 @@ def main():
         )
         synchronize()
 
+    if args.out_dir==None:
+        print('args.out_dir is None!')
+    else:
+        args.opts.extend(['OUTPUT_DIR', args.out_dir])
+
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
 
-    if args.out_dir==None:
-        print('args.out_dir is None!')
+        
 
-    output_dir = os.path.join(args.out_dir, "inference", cfg.DATASETS.TEST[0])
+    output_dir = os.path.join(cfg.OUTPUT_DIR, "inference", cfg.DATASETS.TEST[0])
     if output_dir:
         mkdir(output_dir)
 

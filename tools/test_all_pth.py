@@ -36,26 +36,48 @@ except ImportError:
     raise ImportError('Use APEX for multi-precision via apex.amp')
 
 
-def plot_mAP(result_dict):
-    data = [[],[]]
-    for itr in result_dict:
-        result=result_dict[itr]
-        mAP=result['map']
-        data[0].append(itr)
-        data[1].append(mAP)
+def plot_mAP(result_dict, path_to_png):
     
-    plt.figure(figsize = (18, 8))
-    color = [random.random(), random.random(), random.random()]
-    plt.plot(data[0], data[1], color = color, linewidth = 1.7)
-    plt.title('test mAP vs itr')
-    plt.savefig(path_to_png)
-    #plt.show()
+    if result_dict:
+        # 重新排序
+        result_list=[]
+        for itr in result_dict:
+            result=result_dict[itr]
+            if result:
+                itr = int(itr)
+                mAP = float(result['map'])
+                result_list.append([itr, mAP])
+        result_list.sort()
+        print(result_list)
 
+        # 写入文件
+        if result_list:
+            txt_path=path_to_png.replace('.png', '.txt')
+            with open(txt_path, 'w') as ff:
+                for itr, mAP in result_list:
+                    write_line = str(itr)+ ' ' + str(mAP)+'\n'
+                    ff.write(write_line)
+        # 绘图
+        if result_list:
+            data = [[],[]]
+            for itr, mAP in result_list:
+                print(str(itr))
+                print(str(mAP))
+                data[0].append(itr)
+                data[1].append(mAP)
+            
+            plt.figure(figsize = (18, 8))
+            color = [random.random(), random.random(), random.random()]
+            plt.plot(data[0], data[1], color = color, linewidth = 1.7)
+            plt.title('test mAP vs itr')
+            plt.savefig(path_to_png)
+            #plt.show()
+    
 
-def run_test(model, cfg, ckpt_dir, distributed):
-
+def run_test(model, cfg, distributed):
+    init_model = model
     print('find all pth:')
-    for root, dirs, files in os.walk(ckpt_dir):
+    for root, dirs, files in os.walk(cfg.OUTPUT_DIR):
         pth_file_list = glob.glob(os.path.join(root, '*.pth'))
         break
     # print(pth_file_list)
@@ -64,6 +86,10 @@ def run_test(model, cfg, ckpt_dir, distributed):
         itr_str = os.path.basename(pth_file).split('.')[0].split('_')[-1]
         if itr_str[0]=='0':
             itr = int(itr_str)
+            '''
+            if itr%1000!=0:
+                continue
+            '''
             ckpt = pth_file
             ckpt_dict[itr]=ckpt
         elif itr_str=='final':
@@ -76,14 +102,12 @@ def run_test(model, cfg, ckpt_dir, distributed):
             exit()
     print(ckpt_dict)
     
-    output_dir = cfg.OUTPUT_DIR
-    
     result_dict = {}
     for itr in ckpt_dict:
         ckpt=ckpt_dict[itr]
         print(str(itr), ckpt)
-        
-        checkpointer = DetectronCheckpointer(cfg, model, save_dir=output_dir)
+        model=init_model
+        checkpointer = DetectronCheckpointer(cfg, model, save_dir=cfg.OUTPUT_DIR)
         _ = checkpointer.load(ckpt, use_latest=None)
         
         if distributed:
@@ -115,8 +139,11 @@ def run_test(model, cfg, ckpt_dir, distributed):
                             output_folder=output_folder,
                             )
             synchronize()
-        result_dict[itr]=result
-    plot_mAP(result_dict)
+            if result != None:
+                print('result', result)
+                result_dict[itr]=result
+                #print('result_dict', result_dict)
+    return result_dict
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Testing")
@@ -128,13 +155,6 @@ def main():
         type=str,
     )
     parser.add_argument("--local_rank", type=int, default=0)
-    parser.add_argument(
-        "--ckpt-dir",
-        default="",
-        metavar="FILE",
-        help="path to ckpt file",
-        type=str,
-    )
     parser.add_argument(
         "--out-dir",
         default="",
@@ -161,14 +181,16 @@ def main():
         )
         synchronize()
 
+    if args.out_dir==None:
+        print('args.out_dir is None!')
+    else:
+        args.opts.extend(['OUTPUT_DIR', args.out_dir])
+
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
 
-    if args.out_dir==None:
-        print('args.out_dir is None!')
-
-    output_dir = os.path.join(args.out_dir, "inference", cfg.DATASETS.TEST[0])
+    output_dir = os.path.join(cfg.OUTPUT_DIR, "inference", cfg.DATASETS.TEST[0])
     if output_dir:
         mkdir(output_dir)
 
@@ -194,6 +216,7 @@ def main():
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
 
+    local_rank=args.local_rank
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
             model, device_ids=[local_rank], output_device=local_rank,
@@ -201,8 +224,11 @@ def main():
             broadcast_buffers=False,
         )
 
-    if args.ckpt_dir:
-        run_test(model, cfg, args.ckpt_dir, args.distributed)
+    if args.out_dir:
+        result_dict = run_test(model, cfg, args.distributed)
+
+    path_to_png = os.path.join(output_dir, "test_mAP.png")
+    plot_mAP(result_dict, path_to_png)
 
 
 if __name__ == "__main__":
