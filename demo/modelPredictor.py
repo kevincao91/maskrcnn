@@ -240,14 +240,12 @@ class Predictor(object):
         return colors
 
     def overlay_boxes(self, image, predictions, is_gt=False):
-        """
-        Adds the predicted boxes on top of the image
-
-        Arguments:
-            image (np.ndarray): an image as returned by OpenCV
-            predictions (BoxList): the result of the computation by the model.
-                It should contain the field `labels`.
-        """
+        im_w = image.shape[0]
+        im_h = image.shape[1]
+        show_scale = 1.2 * np.e ** ((min(im_w, im_h) - 1000) / 1000)
+        if show_scale<1.2: show_scale=1.2
+        r_s = round(2.5 * show_scale)  # 选框边界大小
+        
         labels = predictions.get_field("labels")
         boxes = predictions.bbox
         
@@ -264,39 +262,68 @@ class Predictor(object):
         for box, color in zip(boxes, colors):
             box = box.to(torch.int64)
             top_left, bottom_right = box[:2].tolist(), box[2:].tolist()
-            image = cv2.rectangle(
-                image, tuple(top_left), tuple(bottom_right), tuple(color), 1
-            )
+            image = cv2.rectangle(image, tuple(top_left), tuple(bottom_right),
+                                    tuple(color), thickness=r_s)
 
         return image
         
         
     def overlay_class_names(self, image, predictions, is_gt=False):
-        """
-        Adds detected class names and scores in the positions defined by the
-        top-left corner of the predicted bounding box
-
-        Arguments:
-            image (np.ndarray): an image as returned by OpenCV
-            predictions (BoxList): the result of the computation by the model.
-                It should contain the field `scores` and `labels`.
-        """
+        im_w = image.shape[0]
+        im_h = image.shape[1]
+        show_scale = 1.2 * np.e ** ((min(im_w, im_h) - 800) / 800)
+        if show_scale<1.2: show_scale=1.2
+        f_s = cv2.FONT_HERSHEY_SIMPLEX  # 文字字体
+        t_s = 0.6 * show_scale  # 文字大小
+        t_t = round(1.3 * show_scale)  # 文字线条粗细
+        r_s = round(2.5 * show_scale)  # 选框边界大小
+        h_r_s = round(2.5 * show_scale * 0.5)  # 选框边界大小一半
+        txt_color=(255, 255, 255)
+        label_loc='top left'   # 'top left'    'top right'
+    
         scores = predictions.get_field("scores").tolist()
         labels = predictions.get_field("labels").tolist()
         labels = [self.label_map[i] for i in labels]
         boxes = predictions.bbox
+        colors = self.compute_colors_for_labels(predictions.get_field("labels")).tolist()
 
-        template = "{}: {:.2f}"
-        for box, score, label in zip(boxes, scores, labels):
-            x, y = box[:2]
+        for box, score, label, color in zip(boxes, scores, labels, colors):
+            box = box.to(torch.int64)
+            x1, y1, x2, y2 = box.tolist()
+            sco_color = tuple([int(item*0.8) for item in color])
+            label=label.replace('_foreign','*')
             if is_gt:
-                s = "GT:{}".format(label)
-                cv2.putText(
-                    image, s, (x, y+10), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1)
+                label = "GT:{}".format(label)
+                textSize_l, baseline = cv2.getTextSize(label, f_s, t_s, t_t)
+                t_width = textSize_l[0]
+                t_hight = textSize_l[1]
+                gt_color = (0, 0, 255)
+                # 小框
+                cv2.rectangle(image, (x1+r_s, y1+r_s), (x1+r_s+t_width, y1+t_hight+baseline+r_s), gt_color, thickness=-1)
+                cv2.putText(image, label, (x1+r_s, y1+t_hight+r_s), f_s, t_s, txt_color, thickness=t_t)
             else:
-                s = template.format(label, score)
-                cv2.putText(
-                    image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1)
+                if label_loc=='top right':
+                    label = "{}".format(label)
+                    score = "{:.2f}".format(score)
+                    textSize_l, baseline = cv2.getTextSize(label, f_s, t_s, t_t)
+                    textSize_s, baseline = cv2.getTextSize(score, f_s, t_s, t_t)
+                    t_width = max(textSize_l[0],textSize_s[0])
+                    t_hight = max(textSize_l[1],textSize_s[1])
+                    # 小框
+                    cv2.rectangle(image, (x2+h_r_s, y1-h_r_s), (x2+h_r_s+t_width, y1+t_hight+baseline-h_r_s), color, thickness=-1)
+                    cv2.rectangle(image, (x2+h_r_s, y1+t_hight+baseline-h_r_s), (x2+h_r_s+t_width, y1+2*t_hight+baseline-h_r_s), sco_color, thickness=-1)
+                    # 文字
+                    cv2.putText(image, label, (x2+h_r_s, y1+t_hight-h_r_s), f_s, t_s, txt_color, thickness=t_t)
+                    cv2.putText(image, score, (x2+h_r_s, y1+2*t_hight+baseline-h_r_s), f_s, t_s, txt_color, thickness=t_t)
+                elif label_loc=='top left':
+                    label = "{}:{:.2f}".format(label,score)
+                    textSize_l, baseline = cv2.getTextSize(label, f_s, t_s, t_t)
+                    t_width= textSize_l[0]
+                    t_hight = textSize_l[1]
+                    # 小框
+                    cv2.rectangle(image, (x1-h_r_s, y1-t_hight-h_r_s), (x1+t_width-h_r_s, y1-h_r_s), color, thickness=-1)
+                    # 文字
+                    cv2.putText(image, label, (x1, y1-h_r_s), f_s, t_s, txt_color, thickness=t_t)
 
         return image 
 

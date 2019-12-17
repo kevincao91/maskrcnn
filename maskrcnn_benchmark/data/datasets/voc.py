@@ -39,7 +39,6 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         "train",
         "tvmonitor",
     )
-    '''
     CLASSES = (
         "__background__ ",
         "car",
@@ -47,7 +46,14 @@ class PascalVOCDataset(torch.utils.data.Dataset):
         "van",
         "others",
     )
-
+    '''
+    CLASSES = (
+        "__background__ ",
+        "person_foreign",
+        "car_foreign",
+        "person",
+        "car",
+    )
     
     
     def __init__(self, data_dir, split, use_difficult=False, transforms=None):

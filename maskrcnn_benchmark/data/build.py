@@ -82,7 +82,7 @@ def _compute_aspect_ratios(dataset):
     aspect_ratios = []
     for i in range(len(dataset)):
         # add  test
-        if i%5000==0:
+        if i%10000==0:
             print(i,'/',len(dataset))
         img_info = dataset.get_img_info(i)
         aspect_ratio = float(img_info["height"]) / float(img_info["width"])
@@ -156,6 +156,7 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
         "maskrcnn_benchmark.config.paths_catalog", cfg.PATHS_CATALOG, True
     )
     DatasetCatalog = paths_catalog.DatasetCatalog
+    
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
 
     # If bbox aug is enabled in testing, simply set transforms to None and we will apply transforms later

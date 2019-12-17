@@ -126,7 +126,7 @@ print('model init finish!')
 need_xml = False
 need_img = True
 need_video = False
-show_gt = True
+show_gt = False
 
 if need_video:
     # init video info
