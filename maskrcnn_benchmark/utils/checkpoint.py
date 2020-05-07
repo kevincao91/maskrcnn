@@ -38,10 +38,20 @@ class Checkpointer(object):
 
         data = {}
         data["model"] = self.model.state_dict()
+        # add by kevin.cao at 20.01.08 ===
         if self.optimizer is not None:
-            data["optimizer"] = self.optimizer.state_dict()
+            if isinstance(self.optimizer,list):
+                data["optimizer_mask"] = self.optimizer[0].state_dict()
+                data["optimizer_classifier"] = self.optimizer[1].state_dict()
+            else:
+                data["optimizer"] = self.optimizer.state_dict()
         if self.scheduler is not None:
-            data["scheduler"] = self.scheduler.state_dict()
+            if isinstance(self.optimizer,list):
+                data["scheduler_mask"] = self.scheduler[0].state_dict()
+                data["scheduler_classifier"] = self.scheduler[1].state_dict()
+            else:
+                data["scheduler"] = self.scheduler.state_dict()
+        # ================
         data.update(kwargs)
 
         save_file = os.path.join(self.save_dir, "{}.pth".format(name))
@@ -132,6 +142,7 @@ class DetectronCheckpointer(Checkpointer):
             f = cached_f
         # convert Caffe2 checkpoint from pkl
         if f.endswith(".pkl"):
+            print(f)
             return load_c2_format(self.cfg, f)
         # load native detectron.pytorch checkpoint
         loaded = super(DetectronCheckpointer, self)._load_file(f)

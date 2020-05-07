@@ -8,7 +8,36 @@ from maskrcnn_benchmark.modeling.backbone import resnet
 from maskrcnn_benchmark.modeling.poolers import Pooler
 from maskrcnn_benchmark.modeling.make_layers import group_norm
 from maskrcnn_benchmark.modeling.make_layers import make_fc
+from torchvision import models
 
+# add by kevin.cao at 20.01.08 ========
+@registry.ROI_BOX_FEATURE_EXTRACTORS.register("VGG16fcROIFeatureExtractor")
+class VGG16fcROIFeatureExtractor(nn.Module):
+    def __init__(self, config, in_channels):
+        super(VGG16fcROIFeatureExtractor, self).__init__()
+
+        resolution = config.MODEL.ROI_BOX_HEAD.POOLER_RESOLUTION
+        scales = config.MODEL.ROI_BOX_HEAD.POOLER_SCALES
+        sampling_ratio = config.MODEL.ROI_BOX_HEAD.POOLER_SAMPLING_RATIO
+        pooler = Pooler(
+            output_size=(resolution, resolution),
+            scales=scales,
+            sampling_ratio=sampling_ratio,
+        )
+
+        vgg16_pretrained = models.vgg16(pretrained=True)
+        head = nn.Sequential(*list(vgg16_pretrained.classifier._modules.values())[:-1])
+
+        self.pooler = pooler
+        self.head = head
+        self.out_channels = 4096
+
+    def forward(self, x, proposals):
+        x = self.pooler(x, proposals)
+        x = self.head(x)
+        return x
+
+# =====================================
 
 @registry.ROI_BOX_FEATURE_EXTRACTORS.register("ResNet50Conv5ROIFeatureExtractor")
 class ResNet50Conv5ROIFeatureExtractor(nn.Module):

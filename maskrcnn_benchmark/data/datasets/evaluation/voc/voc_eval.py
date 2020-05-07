@@ -23,10 +23,12 @@ def do_voc_evaluation(dataset, predictions, output_folder, logger):
 
         gt_boxlist = dataset.get_groundtruth(image_id)
         gt_boxlists.append(gt_boxlist)
+    iou_thresh=0.7
+    logger.info('NOTE: iou_thresh=='+str(iou_thresh))
     result = eval_detection_voc(
         pred_boxlists=pred_boxlists,
         gt_boxlists=gt_boxlists,
-        iou_thresh=0.5,
+        iou_thresh=iou_thresh,
         use_07_metric=True,
     )
     result_str = "mAP: {:.4f}\n".format(result["map"])

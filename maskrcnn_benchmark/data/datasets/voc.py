@@ -49,9 +49,6 @@ class PascalVOCDataset(torch.utils.data.Dataset):
     '''
     CLASSES = (
         "__background__ ",
-        "person_foreign",
-        "car_foreign",
-        "person",
         "car",
     )
     
@@ -77,6 +74,12 @@ class PascalVOCDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         img_id = self.ids[index]
+        
+        # kevin
+        # print('kevin test：',index)
+        # print('kevin test：',self._imgpath % img_id)
+        # ===
+        
         img = Image.open(self._imgpath % img_id).convert("RGB")
 
         target = self.get_groundtruth(index)
@@ -92,9 +95,19 @@ class PascalVOCDataset(torch.utils.data.Dataset):
 
     def get_groundtruth(self, index):
         img_id = self.ids[index]
+        # kevin
+        # print('kevin test：',index)
+        # print('kevin test：',self._annopath % img_id)
+        # ===
         anno = ET.parse(self._annopath % img_id).getroot()
         anno = self._preprocess_annotation(anno)
-
+        # kevin
+        if anno["boxes"].ndimension() != 2:
+            print('kevin test：',index)
+            print('kevin test：',self._annopath % img_id)
+            # os.remove(self._annopath % img_id)
+            print('no target in xml！!！!！!！!')
+        # ===
         height, width = anno["im_info"]
         target = BoxList(anno["boxes"], (width, height), mode="xyxy")
         target.add_field("labels", anno["labels"])
@@ -121,6 +134,17 @@ class PascalVOCDataset(torch.utils.data.Dataset):
                 bb.find("xmax").text,
                 bb.find("ymax").text,
             ]
+            
+            # add by kevin.cao at 0113  ===
+            try:
+                tmp = list(map(int, box))
+            except:
+                for i,loc in enumerate(box):
+                    loc = float(loc)
+                    #loc = int(loc)
+                    box[i] = loc
+            # =============================
+            
             bndbox = tuple(
                 map(lambda x: x - TO_REMOVE, list(map(int, box)))
             )

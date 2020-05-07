@@ -21,15 +21,15 @@ parser.add_argument('--label',type=str,default='jt2xizang')
 args=parser.parse_args()
 
 cfg_dic={
-	'jt':'/media/kevin/办公/xizang/JT_model/models/model_one/e2e_faster_rcnn_R_50_FPN_1x.yaml',
-	'xizang':'/media/kevin/办公/xizang/1130_ex18_outputs/infer_configs.yaml',
-	'nofe':'/media/kevin/办公/NofE/1203_ex6_outputs/infer_configs.yaml',
+	'jt':'/media/kevin/WorkSpace/xizang/JT_model/models/model_one/e2e_faster_rcnn_R_50_FPN_1x.yaml',
+	'xizang':'/media/kevin/WorkSpace/xizang/1130_ex18_outputs/infer_configs.yaml',
+	'nofe':'/media/kevin/WorkSpace/NofE/1203_ex6_outputs/infer_configs.yaml',
 }
 
 wts_dic={
-	'jt':'/media/kevin/办公/xizang/JT_model/models/model_one/model_final.pth',
-	'xizang':'/media/kevin/办公/xizang/1130_ex18_outputs/model_final.pth',
-	'nofe':'/media/kevin/办公/NofE/1203_ex6_outputs/model_final.pth',
+	'jt':'/media/kevin/WorkSpace/xizang/JT_model/models/model_one/model_final.pth',
+	'xizang':'/media/kevin/WorkSpace/xizang/1130_ex18_outputs/model_final.pth',
+	'nofe':'/media/kevin/WorkSpace/NofE/1203_ex6_outputs/model_final.pth',
 }
 
 label_dic={
@@ -57,11 +57,11 @@ label_dic={
     1: "person_foreign",
     2: "motorbike_foreign",
     3: "car_foreign",
-    4: "bus_foreign",
-    5: "truck_foreign",
+    4: "SUV_foreign",
+    5: "bus_foreign",
     6: "microbus_foreign",
     7: "pickup_foreign",
-    8: "SUV_foreign",
+    8: "truck_foreign",
     9: "tanker_foreign",
     10: "tractor_foreign",
     11: "engineeringvan_foreign",
@@ -123,7 +123,7 @@ detectModel=Predictor(label_map)
 detectModel.initModel(cfg_path, wts_path)
 print('model init finish!')
 
-need_xml = False
+need_xml = True
 need_img = True
 need_video = False
 show_gt = False
@@ -147,13 +147,13 @@ if args.wscene == None or args.wscene == 'all':
     im_list = glob.glob(img_path + '/*.jpg')
 else:
     im_list = glob.glob(img_path + '/{}*.jpg'.format(args.wscene))
-print(im_list[:10])
+print('im_list[:10]\n', im_list[:10])
 pic_len=len(im_list)
 
 
 for i in tqdm(range(pic_len)):
-    if i%50 != 0:
-        continue
+    #if i%50 != 0:
+    #    continue
     pic_name=os.path.basename(im_list[i])
     image_in = cv2.imread(im_list[i])
     xml_file_path = os.path.join(xml_path, pic_name.replace('.jpg', '.xml'))

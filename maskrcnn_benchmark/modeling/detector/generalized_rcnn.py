@@ -27,6 +27,21 @@ class GeneralizedRCNN(nn.Module):
         super(GeneralizedRCNN, self).__init__()
 
         self.backbone = build_backbone(cfg)
+        print('self.backbone\n',self.backbone)
+        print('self.backbone.out_channels',self.backbone.out_channels)
+        '''
+        # add by kevin.cao at 20.01.08 ===
+        #if self.args.threshold_fn == 'binarizer':
+        if True:
+            print('Num 0ed out parameters:')
+            for idx, module in enumerate(self.backbone.body.modules()):
+                if 'ElementWise' in str(type(module)):
+                    num_zero = module.mask_real.data.lt(5e-3).sum()
+                    total = module.mask_real.data.numel()
+                    print(idx, num_zero, total)
+        print('-' * 20)
+        # ================================
+        '''
         self.rpn = build_rpn(cfg, self.backbone.out_channels)
         self.roi_heads = build_roi_heads(cfg, self.backbone.out_channels)
 

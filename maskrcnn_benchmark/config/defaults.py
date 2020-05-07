@@ -60,6 +60,8 @@ _C.INPUT.CONTRAST = 0.0
 _C.INPUT.SATURATION = 0.0
 _C.INPUT.HUE = 0.0
 
+# add by kevin.cao at 20.05.01
+_C.INPUT.HORIZONTAL_FLIP_PROB_TRAIN = 0.5
 _C.INPUT.VERTICAL_FLIP_PROB_TRAIN = 0.0
 
 # add by kevin.cao at 19.11.28
@@ -417,6 +419,11 @@ _C.SOLVER.CHECKPOINT_PERIOD = 2500
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will
 # see 2 images per batch
 _C.SOLVER.IMS_PER_BATCH = 16
+
+# add by kevin.cao ====
+_C.SOLVER.PG_MASK_LR = 0.0
+_C.SOLVER.PG_HEAD_LR = 0.0
+_C.SOLVER.PG_LR_DECAY = 0
 
 # ---------------------------------------------------------------------------- #
 # Specific test options

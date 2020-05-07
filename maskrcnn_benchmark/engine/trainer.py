@@ -51,11 +51,35 @@ def do_train(
     meters = MetricLogger(delimiter="  ")
     max_iter = len(data_loader)
     start_iter = arguments["iteration"]
+    # add by kevin.cao at 20.01.08 ===
+    
+    print(model)
+    
+    '''
+    # add by kevim.cao at 19.12.19 ===
+    for key, value in model.named_parameters():
+        print(key, value.requires_grad)
+    # =================
+    '''
+
+    PGflag = True if isinstance(optimizer,list) else False
+    #if self.args.threshold_fn == 'binarizer':
+    '''
+    if True:
+        print('Num 0ed out parameters:')
+        for idx, module in enumerate(model.backbone.body.modules()):
+            if 'ElementWise' in str(type(module)):
+                num_zero = module.mask_real.data.lt(5e-3).sum()
+                total = module.mask_real.data.numel()
+                print(idx, num_zero, total)
+    print('-' * 20)
+    '''
+    # ================================
     model.train()
     start_training_time = time.time()
     end = time.time()
     for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
-        print('read img num:', len(targets))
+        #print('read img num:', len(targets))
 
         if any(len(target) < 1 for target in targets):
             logger.error(f"Iteration={iteration + 1} || Image Ids used for training {_} || targets Length={[len(target) for target in targets]}" )
@@ -64,7 +88,31 @@ def do_train(
         iteration = iteration + 1
         arguments["iteration"] = iteration
 
-        scheduler.step()
+        # add by kevin.cao at 20.01.08 ===
+        if PGflag:
+            for scheduler_ in scheduler:
+                scheduler_.step()
+        else:
+            scheduler.step()
+            
+        model.zero_grad()
+        # ================================
+        '''
+        # ===
+        print('1==' * 20, iteration)
+        if True:
+            print('Num 0ed out parameters:')
+            for idx, module in enumerate(model.backbone.body.modules()):
+                if 'ElementWise' in str(type(module)):
+                    print(module.mask_real[0][0])
+                    num_zero = module.mask_real.data.lt(5e-3).sum()
+                    total = module.mask_real.data.numel()
+                    print(idx, num_zero, total)
+                if idx >= 1:
+                    break
+        print('-' * 20)
+        # =========
+        '''
 
         images = images.to(device)
         targets = [target.to(device) for target in targets]
@@ -78,13 +126,68 @@ def do_train(
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
         meters.update(loss=losses_reduced, **loss_dict_reduced)
 
-        optimizer.zero_grad()
+        # add by kevin.cao at 20.01.08 ===
+        if PGflag:
+            for optimizer_ in optimizer:
+                optimizer_.zero_grad()
+        else:
+            optimizer.zero_grad()
+        # ================================
+        '''
         # Note: If mixed precision is not used, this ends up doing nothing
         # Otherwise apply loss scaling for mixed-precision recipe
         with amp.scale_loss(losses, optimizer) as scaled_losses:
             scaled_losses.backward()
-        optimizer.step()
+        '''
+        
+        losses.backward()
 
+        '''
+        # ===
+        print('3==' * 20, iteration)
+        if True:
+            print('Num 0ed out parameters:')
+            for idx, module in enumerate(model.backbone.body.modules()):
+                if 'ElementWise' in str(type(module)):
+                    print(module.mask_real[0][0])
+                    num_zero = module.mask_real.data.lt(5e-3).sum()
+                    total = module.mask_real.data.numel()
+                    print(idx, num_zero, total)
+                if idx >= 1:
+                    break
+        print('-' * 20)
+        # =========
+        '''
+        
+        # add by kevin.cao at 20.01.08 ===
+        if PGflag:
+            for optimizer_ in optimizer:
+                optimizer_.step()
+        else:
+            optimizer.step()
+        # ================================
+        # ===
+        '''
+        print('4==' * 20, iteration)
+        if True:
+            print('Num 0ed out parameters:')
+            for idx, module in enumerate(model.backbone.body.modules()):
+                if 'ElementWise' in str(type(module)):
+                    print(module.mask_real[0][0])
+                    num_zero = module.mask_real.data.lt(5e-3).sum()
+                    total = module.mask_real.data.numel()
+                    print(idx, num_zero, total)
+                    print (module.mask_real[0][0].grad_fn)
+                if idx >= 1:
+                    break
+        print('-' * 20)
+        # =========
+        '''
+        '''
+        if iteration == 50:
+            exit() 
+        '''
+        
         batch_time = time.time() - end
         end = time.time()
         meters.update(time=batch_time, data=data_time)
@@ -93,23 +196,62 @@ def do_train(
         eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
         if iteration % 20 == 0 or iteration == max_iter:
-            logger.info(
-                meters.delimiter.join(
-                    [
-                        "eta: {eta}",
-                        "iter: {iter}",
-                        "{meters}",
-                        "lr: {lr:.6f}",
-                        "max mem: {memory:.0f}",
-                    ]
-                ).format(
-                    eta=eta_string,
-                    iter=iteration,
-                    meters=str(meters),
-                    lr=optimizer.param_groups[0]["lr"],
-                    memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
+            # add by kevin.cao at 20.01.08 ===
+            if PGflag:
+                logger.info(
+                    meters.delimiter.join(
+                        [
+                            "eta: {eta}",
+                            "iter: {iter}",
+                            "{meters}",
+                            "lr_mask: {lr_mask:.6f}",
+                            "lr_head: {lr_head:.6f}",
+                            "max mem: {memory:.0f}",
+                        ]
+                    ).format(
+                        eta=eta_string,
+                        iter=iteration,
+                        meters=str(meters),
+                        lr_mask=optimizer[0].param_groups[0]["lr"],
+                        lr_head=optimizer[1].param_groups[0]["lr"],
+                        memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
+                    )
                 )
-            )
+            else:
+                logger.info(
+                    meters.delimiter.join(
+                        [
+                            "eta: {eta}",
+                            "iter: {iter}",
+                            "{meters}",
+                            "lr: {lr:.6f}",
+                            "max mem: {memory:.0f}",
+                        ]
+                    ).format(
+                        eta=eta_string,
+                        iter=iteration,
+                        meters=str(meters),
+                        lr=optimizer.param_groups[0]["lr"],
+                        memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
+                    )
+                )
+            # ================================
+        
+        #if self.args.threshold_fn == 'binarizer':
+        '''
+        if iteration % 20 == 0:
+            print('Num 0ed out parameters:')
+            for idx, module in enumerate(model.backbone.body.modules()):
+                if 'ElementWise' in str(type(module)):
+                    if idx<=1:
+                        print(module.mask_real[0][0])
+                    num_zero = module.mask_real.data.lt(5e-3).sum()
+                    total = module.mask_real.data.numel()
+                    print(idx, num_zero, total)
+            print('-' * 20)
+        '''
+        # ================================
+        
         if iteration % checkpoint_period == 0:
             checkpointer.save("model_{:07d}".format(iteration), **arguments)
         if iteration == max_iter:

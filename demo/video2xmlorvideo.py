@@ -20,13 +20,13 @@ parser.add_argument('--label',type=str,default='jt2xizang')
 args=parser.parse_args()
 
 cfg_dic={
-	'jt':'/media/kevin/办公/xizang/JT_model/models/model_one/e2e_faster_rcnn_R_50_FPN_1x.yaml',
-	'xizang':'/media/kevin/办公/xizang/1130_ex18_outputs/infer_configs.yaml',
+	'jt':'/media/kevin/WorkSpace/xizang/JT_model/models/model_one/e2e_faster_rcnn_R_50_FPN_1x.yaml',
+	'xizang':'/media/kevin/WorkSpace/xizang/1130_ex18_outputs/infer_configs.yaml',
 }
 
 wts_dic={
-	'jt':'/media/kevin/办公/xizang/JT_model/models/model_one/model_final.pth',
-	'xizang':'/media/kevin/办公/xizang/1130_ex18_outputs/model_final.pth',
+	'jt':'/media/kevin/WorkSpace/xizang/JT_model/models/model_one/model_final.pth',
+	'xizang':'/media/kevin/WorkSpace/xizang/1130_ex18_outputs/model_final.pth',
 }
 
 label_dic={
@@ -88,12 +88,12 @@ label_dic={
 
 scene = args.scene
 print('当前选择模型场景为：{} \n'.format(scene))
-if args.cfg_file:
+if args.cfg_file != 'None':
     cfg_path=args.cfg_file
 else:
     cfg_path=cfg_dic[scene]
 print('当前选择配置文件路径为：{} \n'.format(cfg_path))
-if args.wts_file:
+if args.wts_file != 'None':
     wts_path=args.wts_file
 else:
     wts_path=wts_dic[scene]
@@ -103,16 +103,16 @@ if args.label:
 else:
     label_map=label_dic[scene]
 print('当前选择映射标签表为：{} \n'.format(label_map))
-img_path=args.imgs_dir
+video_file=args.video_file
 out_xml_path=args.outputs_dir
 if not os.path.exists(out_xml_path):
     os.makedirs(out_xml_path)
 img_out_dir = os.path.join(args.outputs_dir, "img")
 if not os.path.exists(img_out_dir):
     os.mkdir(img_out_dir)
-print('原始图片路径为：{} \nxml输出路径为：{}\nimg输出路径为：{}'.format(img_path,out_xml_path,img_out_dir))
+print('原始视频路径为：{} \nxml输出路径为：{}\nimg输出路径为：{}'.format(video_file,out_xml_path,img_out_dir))
 
-detectModel=Predictor()
+detectModel=Predictor(label_map)
 detectModel.initModel(cfg_path, wts_path)
 print('model init finish!')
 
@@ -126,20 +126,26 @@ video_name=video_file.split('/')[-1].split('.')[0]
 fps = cap.get(cv2.CAP_PROP_FPS)
 size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
         int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-# if resize
-video_size = (1280, 720) 
-video_fps = fps     
-        
-# point out how to encode videos
-# I420-avi=>cv2.cv.CV_FOURCC('X','2','6','4');
-# MP4=>cv2.cv.CV_FOURCC('M', 'J', 'P', 'G')
-result_path = os.path.join(out_video_path, video_name + "_det.avi")
-videowriter = cv2.VideoWriter(result_path, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), video_fps, video_size)
-
 
 need_xml = False
 need_img = True
 need_video = False
+show_gt = False
+
+
+# if resize
+if need_video:
+    video_name='outputs'
+    video_size = (1280, 720) 
+    video_fps = fps
+        
+    # point out how to encode videos
+    # I420-avi=>cv2.cv.CV_FOURCC('X','2','6','4');
+    # MP4=>cv2.cv.CV_FOURCC('M', 'J', 'P', 'G')
+    result_path = os.path.join(args.outputs_dir, video_name + "_det.avi")
+    videowriter = cv2.VideoWriter(result_path, cv2.VideoWriter_fourcc('X', 'V', 'I', 'D'), video_fps, video_size)
+
+
 
 max_num_frame = 1000
 print('max_num_frame: ', max_num_frame)
@@ -152,9 +158,20 @@ for i in tqdm(range(max_num_frame)):
         raise RuntimeError("Webcam could not open. Please check connection.")
     ret, frame_bgr = cap.read()
 
-if need_video:
-    # 对video需要resize,对xml不需要
-    frame_in = cv2.resize(frame_bgr, video_size)
+    if show_gt:
+        if os.path.exists(xml_file_path):
+            gt = detectModel.get_gt(xml_file_path)
+        else:
+            continue
+    else:
+        gt = None
+
+    if need_video:
+        # 对video需要resize,对xml不需要
+        frame_in = cv2.resize(frame_bgr, video_size)
+    else:
+        frame_in = frame_bgr
+        
     '''
     cv2.imshow('in', frame_in)
     if cv2.waitKey(500) & 0xFF == ord('q'):
@@ -167,7 +184,7 @@ if need_video:
         etree.ElementTree(get_xml).write(os.path.join(out_xml_path,pic_name).rstrip(".jpg") + '.xml', pretty_print=True)
 
     if need_img or need_video:
-        result = detectModel.get_image_result(image_in, top_predictions)  
+        result = detectModel.get_image_result(frame_in,gt,top_predictions)   
         '''
         cv2.imshow('out', result)
         if cv2.waitKey(500) & 0xFF == ord('q'):

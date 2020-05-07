@@ -7,7 +7,61 @@ from maskrcnn_benchmark.modeling import registry
 from maskrcnn_benchmark.modeling.make_layers import conv_with_kaiming_uniform
 from . import fpn as fpn_module
 from . import resnet
+from . import piggyback_resnet
+from . import piggyback_vgg
 
+# add by kavin.cao at 20.01.07 ====
+@registry.BACKBONES.register("V-16-C4")
+@registry.BACKBONES.register("PGV-16-C4")
+def build_piggyback_vgg_backbone(cfg):
+    body = piggyback_vgg.ModifiedVGG16(cfg)
+    model = nn.Sequential(OrderedDict([("body", body)]))
+    model.out_channels = cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
+    
+    # add by kevin.cao at 20.01.08 ===
+    #if self.args.threshold_fn == 'binarizer':
+    if True:
+        print('Num 0ed out parameters:')
+        for idx, module in enumerate(body.modules()):
+            if 'ElementWise' in str(type(module)):
+                num_zero = module.mask_real.data.lt(5e-3).sum()
+                total = module.mask_real.data.numel()
+                print(idx, num_zero, total)
+    print('-' * 20)
+    # ================================
+    
+    # add by kavin.cao at 20.01.07 ====
+    print(model)
+    #exit()
+    
+    return model
+# ===========================================
+
+# add by kavin.cao at 20.01.07 ====
+@registry.BACKBONES.register("PGR-50-C4")
+def build_piggyback_resnet_backbone(cfg):
+    body = piggyback_resnet.ModifiedResNet(cfg)
+    model = nn.Sequential(OrderedDict([("body", body)]))
+    model.out_channels = cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
+    
+    # add by kevin.cao at 20.01.08 ===
+    #if self.args.threshold_fn == 'binarizer':
+    if True:
+        print('Num 0ed out parameters:')
+        for idx, module in enumerate(body.modules()):
+            if 'ElementWise' in str(type(module)):
+                num_zero = module.mask_real.data.lt(5e-3).sum()
+                total = module.mask_real.data.numel()
+                print(idx, num_zero, total)
+    print('-' * 20)
+    # ================================
+    
+    # add by kavin.cao at 20.01.07 ====
+    print(model)
+    #exit()
+    
+    return model
+# ===========================================
 
 @registry.BACKBONES.register("R-50-C4")
 @registry.BACKBONES.register("R-50-C5")
@@ -17,6 +71,11 @@ def build_resnet_backbone(cfg):
     body = resnet.ResNet(cfg)
     model = nn.Sequential(OrderedDict([("body", body)]))
     model.out_channels = cfg.MODEL.RESNETS.BACKBONE_OUT_CHANNELS
+    
+    # add by kavin.cao at 20.01.07 ====
+    print(model)
+    #exit()
+    
     return model
 
 
